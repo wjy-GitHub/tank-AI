@@ -1,9 +1,11 @@
 #!/usr/bin/python
 # coding=utf-8
+import operator
 
 import tanks
 import pygame
 import random
+import time
 
 EPS = 16 # 一个格子的大小
 WIDTH, HEIGHT = 480 // EPS - 4, 416 // EPS
@@ -58,8 +60,9 @@ class Environment(tanks.Game):
 
         # make castle invulnerable
         self.level.buildFortress(self.level.TILE_STEEL)
+        self.action_logs = [-1] * 20  # 原为 * 10,和_init调换顺序
         self._init()
-        self.action_logs = [-1] * 10
+
 
 
     def _step(self, action):
@@ -129,6 +132,15 @@ class Environment(tanks.Game):
 
         if self.show:
             self.draw()
+
+        curpos = (self.get_tanks_position()[0][0] // EPS, self.get_tanks_position()[0][1] // EPS)
+        self.pre_null = list.count(self.map_track, 0)
+        self.map_track[curpos[0] + curpos[1] * WIDTH] = 2
+        self.map_track[curpos[0] + 1 + curpos[1] * WIDTH] = 2
+        self.map_track[curpos[0] + (curpos[1] + 1) * WIDTH] = 2
+        self.map_track[curpos[0] + 1 + (curpos[1] + 1) * WIDTH] = 2
+        self.after_null = list.count(self.map_track, 0)
+
         state, reward = self._get_state(), self._get_reward()#TODO something
         self.__checker(state, reward)
         return state, reward, False
@@ -231,7 +243,17 @@ class Environment(tanks.Game):
         你可以根据自己的想法修改这个函数中的变量，以及添加/删除其他的变量。
         """
 
-        self.laststate = [[self.get_tanks_position()[0][0],self.get_tanks_position()[0][1]],]
+        self.laststate = [(self.get_tanks_position()[0][0] // EPS,self.get_tanks_position()[0][1] // EPS),]#修改为 a list of tuple
+        #TODO
+        self.action_logs.pop(0)
+        self.action_logs.append(1)
+        for tup in self.get_steel_position():
+            self.map_track[tup[0]//EPS + (tup[1]//EPS) * WIDTH] = 1
+        self.map_track[self.get_tanks_position()[0][0] // EPS + (self.get_tanks_position()[0][1] // EPS) * WIDTH] = 2
+        self.map_track[self.get_tanks_position()[0][0] // EPS + 1 + (self.get_tanks_position()[0][1] // EPS) * WIDTH] = 2
+        self.map_track[self.get_tanks_position()[0][0] // EPS + (self.get_tanks_position()[0][1] // EPS + 1) * WIDTH] = 2
+        self.map_track[self.get_tanks_position()[0][0] // EPS + 1 + (self.get_tanks_position()[0][1] // EPS + 1) * WIDTH] = 2
+        self.pre_null, self.after_null = list.count(self.map_track, 0), list.count(self.map_track, 0)
 
     def _get_reward(self):
         """
@@ -245,11 +267,87 @@ class Environment(tanks.Game):
         # 本奖励函数思想：走得离前20步越远越好。越近奖励越低
         # 如果采用这个奖励函数，您最后看到的训练效果，会是坦克上下移动或者在顶部左右移动，来使得自己的奖励最大化
         # 在训练过程中，您会看到奖励会不断增加，证明坦克训练正常
-        curpos = self.get_tanks_position()[0]
+        curpos = (self.get_tanks_position()[0][0] // EPS,self.get_tanks_position()[0][1] // EPS)
         reward = 0
-        for l in self.laststate:
-            reward = reward + abs(l[0] - curpos[0]) - 5
-            reward = reward + abs(l[1] - curpos[1]) - 5
+        # pre_null = list.count(self.map_track,0)
+        # self.map_track[curpos[0] + curpos[1] * WIDTH] = 2
+        # self.map_track[curpos[0] + 1 +curpos[1] * WIDTH] = 2
+        # self.map_track[curpos[0] + (curpos[1] + 1) * WIDTH] = 2
+        # self.map_track[curpos[0] + 1 + (curpos[1] + 1) * WIDTH] = 2
+        # after_null = list.count(self.map_track,0)
+        reward = reward + (self.pre_null - self.after_null) * (len(self.map_track) - list.count(self.map_track,1) - self.pre_null) * 10
+        # add
+        s_1 = []
+        for item in self.laststate:
+            flag = False
+            for s in s_1:
+                if operator.eq(s,item):
+                    flag = True
+                    break
+            if not flag:
+                s_1.append(item)
+        flag_2 = False
+        for item in s_1:
+            if operator.eq(item,curpos):
+                reward = reward + len(s_1)
+                flag_2 = True
+                break
+        if not flag_2:
+            reward = reward + len(s_1) * 10
+        # print(s_1)
+
+
+        # for l in self.laststate:
+        #     count = -1
+        #     for l_2 in self.laststate:
+        #         if l_2[0] == l[0] and l_2[1] == l[1]:
+        #             count += 1
+        #         else:
+        #             count -= 1
+        #     if l[0] == curpos[0] and l[1] == curpos[1]:
+        #         count += 1
+        #     else:
+        #         count -= 1
+        #     reward = reward  - count
+        # curdir = self.get_tanks_direction()[0]
+        # flag = False
+        # count = 20
+        # max_x, max_y, min_x, min_y = -10000, -10000, 10000, 10000
+        # for l in self.laststate:
+        #     if l[0] >= max_x:
+        #         max_x = l[0]
+        #     if l[0] <= min_x:
+        #         min_x = l[0]
+        #     if l[1] >= max_y:
+        #         max_y = l[1]
+        #     if l[1] <= min_y:
+        #         min_y = l[1]
+        # for num in range(len(self.laststate)):
+        #     l = self.laststate[num]
+        #     d = self.action_logs[20 - num - 1] - 1
+        #     if curdir == 0 and d == 2:
+        #         reward = reward + abs(l[0] - curpos[0]) * count - 5 * count
+        #         reward = reward + (abs(l[1] - max_y) + abs(curpos[1] - max_y)) * count - 5 * count
+        #     elif curdir == 2 and d == 0:
+        #         reward = reward + abs(l[0] - curpos[0]) * count - 5 * count
+        #         reward = reward + (abs(l[1] - min_y) + abs(curpos[1] - min_y)) * count - 5 * count
+        #     elif curdir == 1 and d == 3:
+        #         reward = reward + (abs(l[0] - min_x) + abs(curpos[0] - min_x)) * count - 5 * count
+        #         reward = reward + abs(l[1] - curpos[1]) * count - 5 * count
+        #     elif curdir == 3 and d == 1:
+        #         reward = reward + (abs(l[0] - max_x) + abs(curpos[0] - max_x)) * count - 5 * count
+        #         reward = reward + abs(l[1] - curpos[1]) * count - 5 * count
+        #     else:
+        #         reward = reward + abs(l[0] - curpos[0]) * count - 5 * count
+        #         reward = reward + abs(l[1] - curpos[1]) * count - 5 * count
+        #     count -= 1
+        #     if l[0] == curpos[0] and l[1] == curpos[1]:
+        #         flag = True
+        # if not flag:
+        #     reward = reward * 2
+        # reward = reward + abs((min_x + max_x) / 2 - curpos[0]) + abs((min_y + max_y) / 2 - curpos[1]) - 10
+        # reward = reward + abs(l[0] - curpos[0]) - 5
+        # reward = reward + abs(l[1] - curpos[1]) - 5
         self.laststate.append(curpos)
         while len(self.laststate) > 20:
             self.laststate.pop(0)
@@ -267,6 +365,49 @@ class Environment(tanks.Game):
         :return: List of numbers
         """
 
+        tank_pos_x = self.get_tanks_position()[0][0] // EPS
+        tank_pos_y = self.get_tanks_position()[0][1] // EPS
+        tank_dir = self.get_tanks_direction()[0]
+        if (tank_pos_x - 1) < 0:
+            en_left_up, en_left_down = 1, 1
+        else:
+            en_left_up = self.map_track[(tank_pos_x - 1) + tank_pos_y * WIDTH]
+            en_left_down = self.map_track[(tank_pos_x - 1) + (tank_pos_y + 1) * WIDTH]
+        if (tank_pos_y - 1) < 0:
+            en_up_left, en_up_right = 1, 1
+        else:
+            en_up_left = self.map_track[tank_pos_x + (tank_pos_y - 1) * WIDTH]
+            en_up_right = self.map_track[(tank_pos_x + 1) + (tank_pos_y - 1) * WIDTH]
+        if (tank_pos_x + 2 >= WIDTH):
+            en_right_up, en_right_down = 1, 1
+        else:
+            en_right_up = self.map_track[(tank_pos_x + 2) + tank_pos_y * WIDTH]
+            en_right_down = self.map_track[(tank_pos_x + 2) + (tank_pos_y + 1) * WIDTH]
+        if (tank_pos_y + 2 >= HEIGHT):
+            en_down_left, en_down_right = 1, 1
+        else:
+            en_down_left = self.map_track[tank_pos_x + (tank_pos_y + 2) * WIDTH]
+            en_down_right = self.map_track[(tank_pos_x + 1) + (tank_pos_y + 2) * WIDTH]
+        up_access = not en_up_left & en_up_right
+        right_access = not en_right_up & en_right_down
+        down_access = not en_down_left & en_down_right
+        left_access = not en_left_up & en_left_down
         # 状态直接返回玩家坦克的坐标
+        # [tank_pos_x,tank_pos_y,tank_dir,en_up_left,en_up_right,en_right_up,en_right_down,en_down_right,en_down_left,en_left_down,en_left_up] + self.map_track
+        return [tank_dir,self.after_null,up_access,right_access,down_access,left_access]
 
-        return [self.get_tanks_position()[0][0]/100-2,self.get_tanks_position()[0][1]/100-2]
+
+if __name__ == '__main__':
+    en = Environment(show=1, debug=0, enemy_num=2)
+    print(en.get_tanks_direction())
+    print(en.get_tanks_position()[0][0] // EPS,",",en.get_tanks_position()[0][1] // EPS)
+    # for pos in en.get_steel_position():
+    #     if pos[0] == 32:
+    #         print(pos)
+    print(en.map_track[54],en.map_track[55],en.map_track[58],en.map_track[59],en.map_track[61])
+    print(en.map_track[338], en.map_track[339], en.map_track[341])
+    print(en.get_action_logs())
+    print(en.get_tanks_position())
+    print(en.laststate[0])
+    print(1 & 0, 0 & 0, 1 & 1)
+    print(list.count(en.map_track,2))
