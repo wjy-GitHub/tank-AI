@@ -118,6 +118,12 @@ def train(task='explore', test=False, save=10, show=10, **kwargs):
         obs, _, _ = env._reset()
         with open(f'logs/{task}/{test}', 'rb') as f:
             agent = torch.load(f)
+            # agent, start_epi = pickle.load(f)
+        env.show = 1
+        tanks.quick = 5
+        run_one_episode(env, agent, defaultdict(list), max_step)
+        tanks.quick = 0
+        env.show = 0
     else:
         last_train_path = f'logs/{task}/last_train.pkl'
         env = Env.Environment(show=0, debug=0, enemy_num=enemy_num)
@@ -133,55 +139,56 @@ def train(task='explore', test=False, save=10, show=10, **kwargs):
             start_epi = 0
             agent = AgentVPG(action_space=action_space, obs_dim=obs_dim)
 
-    t = time.time()
-    loss = []
-    kill_log = []
-    time_cost_log = []
-    for epi in range(start_epi + 1, max_episode):
+        t = time.time()
+        loss = []
+        kill_log = []
+        time_cost_log = []
+        for epi in range(start_epi + 1, max_episode):
 
-        mean_rewards = []
-        ep_ret, ep_len, killed_enemy, done = run_one_episode(env, agent, batch, max_step)
+            mean_rewards = []
+            ep_ret, ep_len, killed_enemy, done = run_one_episode(env, agent, batch, max_step)
 
-        for i in range(len(batch['obs'])//batch_size):
-            tmp = {}
-            for key in batch:
-                tmp[key] = batch[key][i*batch_size:i*batch_size+batch_size]
-            loss.append(agent.update(tmp))
+            for i in range(len(batch['obs'])//batch_size):
+                tmp = {}
+                for key in batch:
+                    tmp[key] = batch[key][i*batch_size:i*batch_size+batch_size]
+                loss.append(agent.update(tmp))
 
-        batch = {'obs': [], 'acts': [], 'weights': [], 'rets': [], 'lens': []}
-        mean_rewards.append(ep_ret)
-        kill_log.append(killed_enemy)
-        time_cost_log.append(ep_len)
-        if epi % 1 == 0 and not test:
-            print(f'Episode {epi}:\ntime: {time.time() - t}\t'
-                  f'current reward: {sum(mean_rewards)/len(mean_rewards)}')
-            loss = []
-            if not flag:
-                print(f'kill log :{kill_log}')
-                print(f'time cost log ： {time_cost_log}')
-            kill_log = []
-            time_cost_log = []
-            with open(f'logs/{task}/last_train.pkl', 'wb') as f:
-                pickle.dump([agent, epi], f)
+            batch = {'obs': [], 'acts': [], 'weights': [], 'rets': [], 'lens': []}
+            mean_rewards.append(ep_ret)
+            kill_log.append(killed_enemy)
+            time_cost_log.append(ep_len)
+            if epi % 1 == 0 and not test:
+                print(f'Episode {epi}:\ntime: {time.time() - t}\t'
+                      f'current reward: {sum(mean_rewards)/len(mean_rewards)}')
+                loss = []
+                if not flag:
+                    print(f'kill log :{kill_log}')
+                    print(f'time cost log ： {time_cost_log}')
+                kill_log = []
+                time_cost_log = []
+                with open(f'logs/{task}/last_train.pkl', 'wb') as f:
+                    pickle.dump([agent, epi], f)
 
-        if epi % save == 0 and not test:
-            with open(f'logs/{task}/log_{epi}.pkl', 'wb') as f:
-                torch.save(agent, f)
-        if epi % show == 0 and not test:
-            env.show = 1
-            tanks.quick = 5
-            run_one_episode(env, agent, defaultdict(list), max_step)
-            tanks.quick = 0
-            env.show = 0
+            if epi % save == 0 and not test:
+                with open(f'logs/{task}/log_{epi}.pkl', 'wb') as f:
+                    torch.save(agent, f)
+            if epi % show == 0 and not test:
+                env.show = 1
+                tanks.quick = 5#5
+                run_one_episode(env, agent, defaultdict(list), max_step)
+                tanks.quick = 0
+                env.show = 0
 
 
 if __name__ == '__main__':
     config = {
         'task': 'explore',
-        'test': False,
+        'test': 'log_1365.pkl',
         'save': 5,
         'show': 5,
         'continue_last_train': True,
     }  # 参数的说明在 train 函数中
+
 
     train(**config)
