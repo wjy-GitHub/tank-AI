@@ -1,6 +1,5 @@
 #!/usr/bin/python
 # coding=utf-8
-import operator
 
 import tanks
 import pygame
@@ -60,9 +59,8 @@ class Environment(tanks.Game):
 
         # make castle invulnerable
         self.level.buildFortress(self.level.TILE_STEEL)
-        self.action_logs = [-1] * 20  # 原为 * 10,和_init调换顺序
         self._init()
-
+        self.action_logs = [-1] * 20  # 原为 * 10
 
 
     def _step(self, action):
@@ -133,7 +131,8 @@ class Environment(tanks.Game):
         if self.show:
             self.draw()
 
-        curpos = (self.get_tanks_position()[0][0] // EPS, self.get_tanks_position()[0][1] // EPS)
+        # 更新地图中坦克到达过的位置，记录在此前后未到达位置数量
+        curpos = (round((self.get_tanks_position()[0][0] - 3) / EPS), round((self.get_tanks_position()[0][1] - 3) / EPS))
         self.pre_null = list.count(self.map_track, 0)
         self.map_track[curpos[0] + curpos[1] * WIDTH] = 2
         self.map_track[curpos[0] + 1 + curpos[1] * WIDTH] = 2
@@ -243,16 +242,15 @@ class Environment(tanks.Game):
         你可以根据自己的想法修改这个函数中的变量，以及添加/删除其他的变量。
         """
 
-        self.laststate = [(self.get_tanks_position()[0][0] // EPS,self.get_tanks_position()[0][1] // EPS),]#修改为 a list of tuple
-        #TODO
-        self.action_logs.pop(0)
-        self.action_logs.append(1)
+        self.laststate = [(self.get_tanks_position()[0][0] - 3,self.get_tanks_position()[0][1] - 3),]#修改为 a list of tuple
+        # 对地图上的障碍物铁块进行记录
         for tup in self.get_steel_position():
             self.map_track[tup[0]//EPS + (tup[1]//EPS) * WIDTH] = 1
-        self.map_track[self.get_tanks_position()[0][0] // EPS + (self.get_tanks_position()[0][1] // EPS) * WIDTH] = 2
-        self.map_track[self.get_tanks_position()[0][0] // EPS + 1 + (self.get_tanks_position()[0][1] // EPS) * WIDTH] = 2
-        self.map_track[self.get_tanks_position()[0][0] // EPS + (self.get_tanks_position()[0][1] // EPS + 1) * WIDTH] = 2
-        self.map_track[self.get_tanks_position()[0][0] // EPS + 1 + (self.get_tanks_position()[0][1] // EPS + 1) * WIDTH] = 2
+        # 记录初始坦克所在位置，为到达过的位置，初始化未到达位置数量
+        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + round((self.get_tanks_position()[0][1] - 3) / EPS)  * WIDTH] = 2
+        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + (round((self.get_tanks_position()[0][1] - 3) / EPS) + 1) * WIDTH] = 2
+        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + 1 + round((self.get_tanks_position()[0][1] - 3) / EPS) * WIDTH] = 2
+        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + 1 + (round((self.get_tanks_position()[0][1] - 3) / EPS) + 1) * WIDTH] = 2
         self.pre_null, self.after_null = list.count(self.map_track, 0), list.count(self.map_track, 0)
 
     def _get_reward(self):
@@ -267,88 +265,29 @@ class Environment(tanks.Game):
         # 本奖励函数思想：走得离前20步越远越好。越近奖励越低
         # 如果采用这个奖励函数，您最后看到的训练效果，会是坦克上下移动或者在顶部左右移动，来使得自己的奖励最大化
         # 在训练过程中，您会看到奖励会不断增加，证明坦克训练正常
-        curpos = (self.get_tanks_position()[0][0] // EPS,self.get_tanks_position()[0][1] // EPS)
+        # 修正坦克像素坐标，-3,A tuple containing two numbers
+        curpos = ((self.get_tanks_position()[0][0] - 3),(self.get_tanks_position()[0][1] - 3))
         reward = 0
-        # pre_null = list.count(self.map_track,0)
-        # self.map_track[curpos[0] + curpos[1] * WIDTH] = 2
-        # self.map_track[curpos[0] + 1 +curpos[1] * WIDTH] = 2
-        # self.map_track[curpos[0] + (curpos[1] + 1) * WIDTH] = 2
-        # self.map_track[curpos[0] + 1 + (curpos[1] + 1) * WIDTH] = 2
-        # after_null = list.count(self.map_track,0)
-        reward = reward + (self.pre_null - self.after_null) * (len(self.map_track) - list.count(self.map_track,1) - self.pre_null) * 10
-        # add
-        s_1 = []
-        for item in self.laststate:
-            flag = False
-            for s in s_1:
-                if operator.eq(s,item):
-                    flag = True
-                    break
-            if not flag:
-                s_1.append(item)
-        flag_2 = False
-        for item in s_1:
-            if operator.eq(item,curpos):
-                reward = reward + len(s_1)
-                flag_2 = True
+        # 当坦克到达全新位置，对其进行奖励，随着未到达地区减少奖励增加
+        if self.pre_null != self.after_null:
+            reward = reward + abs(self.pre_null - self.after_null) * list.count(self.map_track,2) * 10
+        flag = False
+        # 判断当前位置是否和前二十步位置重合
+        for s in self.laststate:
+            if s[0] == curpos[0] and s[1] == curpos[1]:
+                flag = True
                 break
-        if not flag_2:
-            reward = reward + len(s_1) * 10
-        # print(s_1)
+        if not flag:
+            for s in self.laststate:
+                reward = reward + abs(s[0] - curpos[0]) + abs(s[1] - curpos[1])
+            # 只有不重复的位置才被记录，防止坦克原地不动
+            self.laststate.append(curpos)
+        else:
+            for s in self.laststate:
+                reward = reward - (abs(s[0] - curpos[0]) + abs(s[1] - curpos[1])) / 2
 
-
-        # for l in self.laststate:
-        #     count = -1
-        #     for l_2 in self.laststate:
-        #         if l_2[0] == l[0] and l_2[1] == l[1]:
-        #             count += 1
-        #         else:
-        #             count -= 1
-        #     if l[0] == curpos[0] and l[1] == curpos[1]:
-        #         count += 1
-        #     else:
-        #         count -= 1
-        #     reward = reward  - count
-        # curdir = self.get_tanks_direction()[0]
-        # flag = False
-        # count = 20
-        # max_x, max_y, min_x, min_y = -10000, -10000, 10000, 10000
-        # for l in self.laststate:
-        #     if l[0] >= max_x:
-        #         max_x = l[0]
-        #     if l[0] <= min_x:
-        #         min_x = l[0]
-        #     if l[1] >= max_y:
-        #         max_y = l[1]
-        #     if l[1] <= min_y:
-        #         min_y = l[1]
-        # for num in range(len(self.laststate)):
-        #     l = self.laststate[num]
-        #     d = self.action_logs[20 - num - 1] - 1
-        #     if curdir == 0 and d == 2:
-        #         reward = reward + abs(l[0] - curpos[0]) * count - 5 * count
-        #         reward = reward + (abs(l[1] - max_y) + abs(curpos[1] - max_y)) * count - 5 * count
-        #     elif curdir == 2 and d == 0:
-        #         reward = reward + abs(l[0] - curpos[0]) * count - 5 * count
-        #         reward = reward + (abs(l[1] - min_y) + abs(curpos[1] - min_y)) * count - 5 * count
-        #     elif curdir == 1 and d == 3:
-        #         reward = reward + (abs(l[0] - min_x) + abs(curpos[0] - min_x)) * count - 5 * count
-        #         reward = reward + abs(l[1] - curpos[1]) * count - 5 * count
-        #     elif curdir == 3 and d == 1:
-        #         reward = reward + (abs(l[0] - max_x) + abs(curpos[0] - max_x)) * count - 5 * count
-        #         reward = reward + abs(l[1] - curpos[1]) * count - 5 * count
-        #     else:
-        #         reward = reward + abs(l[0] - curpos[0]) * count - 5 * count
-        #         reward = reward + abs(l[1] - curpos[1]) * count - 5 * count
-        #     count -= 1
-        #     if l[0] == curpos[0] and l[1] == curpos[1]:
-        #         flag = True
-        # if not flag:
-        #     reward = reward * 2
-        # reward = reward + abs((min_x + max_x) / 2 - curpos[0]) + abs((min_y + max_y) / 2 - curpos[1]) - 10
         # reward = reward + abs(l[0] - curpos[0]) - 5
         # reward = reward + abs(l[1] - curpos[1]) - 5
-        self.laststate.append(curpos)
         while len(self.laststate) > 20:
             self.laststate.pop(0)
 
@@ -363,11 +302,15 @@ class Environment(tanks.Game):
 
         该函数返回的 必须 是一个list， list的元素 必须 都是数字
         :return: List of numbers
+        1）2）坦克当前坐标，
+        3）4）上一步坐标，
+        5）6）7）8）当前坦克的四个方向是否存在障碍物 True / False
         """
 
-        tank_pos_x = self.get_tanks_position()[0][0] // EPS
-        tank_pos_y = self.get_tanks_position()[0][1] // EPS
-        tank_dir = self.get_tanks_direction()[0]
+        # 坦克的地图格子坐标
+        tank_pos_x = round((self.get_tanks_position()[0][0] - 3) / EPS)
+        tank_pos_y = round((self.get_tanks_position()[0][1] - 3) / EPS)
+        #坦克周围四个方向，每个方向各两个格子
         if (tank_pos_x - 1) < 0:
             en_left_up, en_left_down = 1, 1
         else:
@@ -388,19 +331,22 @@ class Environment(tanks.Game):
         else:
             en_down_left = self.map_track[tank_pos_x + (tank_pos_y + 2) * WIDTH]
             en_down_right = self.map_track[(tank_pos_x + 1) + (tank_pos_y + 2) * WIDTH]
-        up_access = not en_up_left & en_up_right
-        right_access = not en_right_up & en_right_down
-        down_access = not en_down_left & en_down_right
-        left_access = not en_left_up & en_left_down
-        # 状态直接返回玩家坦克的坐标
+
+        # 判断坦克四个方向的通行条件
+        up_access = False if en_up_left == 1 or en_up_right == 1 else True
+        right_access = False if en_right_up == 1 or en_right_down == 1 else True
+        down_access = False if en_down_left == 1 or en_down_right == 1 else True
+        left_access = False if en_left_up == 1 or en_left_down == 1 else True
+        # 状态直接返回玩家坦克的坐标 =》返回坦克当前坐标，上一步坐标，当前坦克的四个方向是否存在障碍物
         # [tank_pos_x,tank_pos_y,tank_dir,en_up_left,en_up_right,en_right_up,en_right_down,en_down_right,en_down_left,en_left_down,en_left_up] + self.map_track
-        return [tank_dir,self.after_null,up_access,right_access,down_access,left_access]
+        # print(tank_pos_x,tank_pos_y,tank_dir,up_access,right_access,down_access,left_access)
+        return [tank_pos_x,tank_pos_y,round(self.laststate[-1][0] / EPS),round(self.laststate[-1][1] / EPS),up_access,right_access,down_access,left_access]
 
 
 if __name__ == '__main__':
     en = Environment(show=1, debug=0, enemy_num=2)
     print(en.get_tanks_direction())
-    print(en.get_tanks_position()[0][0] // EPS,",",en.get_tanks_position()[0][1] // EPS)
+    print(en.get_tanks_position()[0][0],",",en.get_tanks_position()[0][1])
     # for pos in en.get_steel_position():
     #     if pos[0] == 32:
     #         print(pos)
@@ -411,3 +357,4 @@ if __name__ == '__main__':
     print(en.laststate[0])
     print(1 & 0, 0 & 0, 1 & 1)
     print(list.count(en.map_track,2))
+    print(2 & 2)
