@@ -27,7 +27,7 @@ config = {
 * 参数说明：
     task:当前训练任务，explore:探索地图。  
     test:False,训练智能体；str,加载str对应路径存储的智能体，展示训练结果。  
-    >例如：log_1085.pkl，代表的是第1365轮训练得到的智能体(/src/logs/explore/log_1085.pkl)  
+    >例如：log_1085.pkl，代表的是第1085轮训练得到的智能体(/src/logs/explore/log_1085.pkl)  
      
     save:5，每5轮保存一次智能体  
     show:5，每5轮展示一下训练结果
