@@ -102,8 +102,8 @@ def train(task='explore', test=False, save=10, show=10, **kwargs):
     tanks.quick = 0
 
     if flag:
-        batch_size = 512
-        max_step = 512
+        batch_size = 1024
+        max_step = 1024
         enemy_num = 0
     else:
         batch_size = 1024
@@ -184,7 +184,7 @@ def train(task='explore', test=False, save=10, show=10, **kwargs):
 if __name__ == '__main__':
     config = {
         'task': 'explore',
-        'test': 'log_1365.pkl',
+        'test': 'log_1085.pkl',
         'save': 5,
         'show': 5,
         'continue_last_train': True,
