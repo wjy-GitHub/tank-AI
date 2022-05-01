@@ -60,7 +60,7 @@ class Environment(tanks.Game):
         # make castle invulnerable
         self.level.buildFortress(self.level.TILE_STEEL)
         self._init()
-        self.action_logs = [-1] * 20  # 原为 * 10
+        self.action_logs = [-1] * 10  # 原为 * 10
 
 
     def _step(self, action):
@@ -134,10 +134,10 @@ class Environment(tanks.Game):
         # 更新地图中坦克到达过的位置，记录在此前后未到达位置数量
         curpos = (round((self.get_tanks_position()[0][0] - 3) / EPS), round((self.get_tanks_position()[0][1] - 3) / EPS))
         self.pre_null = list.count(self.map_track, 0)
-        self.map_track[curpos[0] + curpos[1] * WIDTH] = 2
-        self.map_track[curpos[0] + 1 + curpos[1] * WIDTH] = 2
-        self.map_track[curpos[0] + (curpos[1] + 1) * WIDTH] = 2
-        self.map_track[curpos[0] + 1 + (curpos[1] + 1) * WIDTH] = 2
+        self.map_track[curpos[0] + curpos[1] * WIDTH] = 1
+        self.map_track[curpos[0] + 1 + curpos[1] * WIDTH] = 1
+        self.map_track[curpos[0] + (curpos[1] + 1) * WIDTH] = 1
+        self.map_track[curpos[0] + 1 + (curpos[1] + 1) * WIDTH] = 1
         self.after_null = list.count(self.map_track, 0)
 
         state, reward = self._get_state(), self._get_reward()#TODO something
@@ -247,10 +247,10 @@ class Environment(tanks.Game):
         for tup in self.get_steel_position():
             self.map_track[tup[0]//EPS + (tup[1]//EPS) * WIDTH] = 1
         # 记录初始坦克所在位置，为到达过的位置，初始化未到达位置数量
-        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + round((self.get_tanks_position()[0][1] - 3) / EPS)  * WIDTH] = 2
-        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + (round((self.get_tanks_position()[0][1] - 3) / EPS) + 1) * WIDTH] = 2
-        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + 1 + round((self.get_tanks_position()[0][1] - 3) / EPS) * WIDTH] = 2
-        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + 1 + (round((self.get_tanks_position()[0][1] - 3) / EPS) + 1) * WIDTH] = 2
+        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + round((self.get_tanks_position()[0][1] - 3) / EPS)  * WIDTH] = 1
+        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + (round((self.get_tanks_position()[0][1] - 3) / EPS) + 1) * WIDTH] = 1
+        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + 1 + round((self.get_tanks_position()[0][1] - 3) / EPS) * WIDTH] = 1
+        self.map_track[round((self.get_tanks_position()[0][0] - 3) / EPS) + 1 + (round((self.get_tanks_position()[0][1] - 3) / EPS) + 1) * WIDTH] = 1
         self.pre_null, self.after_null = list.count(self.map_track, 0), list.count(self.map_track, 0)
 
     def _get_reward(self):
@@ -270,26 +270,30 @@ class Environment(tanks.Game):
         reward = 0
         # 当坦克到达全新位置，对其进行奖励，随着未到达地区减少奖励增加
         if self.pre_null != self.after_null:
-            reward = reward + abs(self.pre_null - self.after_null) * list.count(self.map_track,2) * 10
-        flag = False
-        # 判断当前位置是否和前二十步位置重合
+            reward = reward + list.count(self.map_track,1)#abs(self.pre_null - self.after_null) *
+        flag = 0
+        # # 判断当前位置是否和前二十步位置重合
         for s in self.laststate:
             if s[0] == curpos[0] and s[1] == curpos[1]:
-                flag = True
-                break
-        if not flag:
+                flag += 1
+        if flag == 0:
             for s in self.laststate:
-                reward = reward + abs(s[0] - curpos[0]) + abs(s[1] - curpos[1])
+                reward = reward + abs(s[0] - curpos[0]) + abs(s[1] - curpos[1]) - 10
             # 只有不重复的位置才被记录，防止坦克原地不动
-            self.laststate.append(curpos)
+            # self.laststate.append(curpos)
         else:
-            for s in self.laststate:
-                reward = reward - (abs(s[0] - curpos[0]) + abs(s[1] - curpos[1])) / 2
-
+            reward = reward - flag * 100
+        #     for s in self.laststate:
+        #         reward = reward - (abs(s[0] - curpos[0]) + abs(s[1] - curpos[1])) / 2
         # reward = reward + abs(l[0] - curpos[0]) - 5
         # reward = reward + abs(l[1] - curpos[1]) - 5
-        while len(self.laststate) > 20:
-            self.laststate.pop(0)
+        self.laststate.append(curpos)
+        while len(self.laststate) > 1200:#200
+            first = self.laststate.pop(0)
+            self.map_track[round(first[0] / EPS) + round(first[1] / EPS) * WIDTH] = 0
+            self.map_track[round(first[0] / EPS) + 1 + round(first[1] / EPS) * WIDTH] = 0
+            self.map_track[round(first[0] / EPS) + (round(first[1] / EPS) + 1) * WIDTH] = 0
+            self.map_track[round(first[0] / EPS) + 1 + (round(first[1] / EPS) + 1) * WIDTH] = 0
 
         return reward
 
@@ -310,6 +314,7 @@ class Environment(tanks.Game):
         # 坦克的地图格子坐标
         tank_pos_x = round((self.get_tanks_position()[0][0] - 3) / EPS)
         tank_pos_y = round((self.get_tanks_position()[0][1] - 3) / EPS)
+        # tank_dir = self.get_tanks_direction()[0]
         #坦克周围四个方向，每个方向各两个格子
         if (tank_pos_x - 1) < 0:
             en_left_up, en_left_down = 1, 1
@@ -339,8 +344,9 @@ class Environment(tanks.Game):
         left_access = False if en_left_up == 1 or en_left_down == 1 else True
         # 状态直接返回玩家坦克的坐标 =》返回坦克当前坐标，上一步坐标，当前坦克的四个方向是否存在障碍物
         # [tank_pos_x,tank_pos_y,tank_dir,en_up_left,en_up_right,en_right_up,en_right_down,en_down_right,en_down_left,en_left_down,en_left_up] + self.map_track
-        # print(tank_pos_x,tank_pos_y,tank_dir,up_access,right_access,down_access,left_access)
-        return [tank_pos_x,tank_pos_y,round(self.laststate[-1][0] / EPS),round(self.laststate[-1][1] / EPS),up_access,right_access,down_access,left_access]
+        # print(tank_pos_x, tank_pos_y,up_access, right_access, down_access, left_access)
+        # print(tank_pos_x,tank_pos_y,tank_dir,up_access,right_access,down_access,left_access) round(self.laststate[-1][0] / EPS),round(self.laststate[-1][1] / EPS)round(self.laststate[-1][0] / EPS),round(self.laststate[-1][1] / EPS),
+        return [tank_pos_x,tank_pos_y,up_access,right_access,down_access,left_access]
 
 
 if __name__ == '__main__':
